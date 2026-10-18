@@ -20,7 +20,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY configs ./configs
 RUN uv venv /opt/venv --python 3.12 \
-    && uv pip install --python /opt/venv/bin/python --extra-index-url ${TORCH_INDEX} -e .
+    && uv pip install --python /opt/venv/bin/python --index-strategy unsafe-best-match --extra-index-url ${TORCH_INDEX} -e .
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Artifacts (checkpoints, replay data, metrics) go to a mounted volume; no secrets are baked in.

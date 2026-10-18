@@ -15,7 +15,7 @@ jobs:
       - name: Install (CPU torch)
         run: |
           uv venv --python 3.12
-          uv pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+          uv pip install --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu \
             -e . pytest ruff mypy types-PyYAML
       - run: .venv/bin/ruff check .
       - run: .venv/bin/ruff format --check .

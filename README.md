@@ -20,7 +20,7 @@ strong: see [Status](#status-and-honest-limits).
 ```bash
 uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -e . pytest ruff mypy types-PyYAML     # torch comes from PyPI (CPU or CUDA wheel)
-# smaller CPU-only torch:  uv pip install --extra-index-url https://download.pytorch.org/whl/cpu -e .
+# smaller CPU-only torch:  uv pip install --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu -e .
 uv pip install -e '.[wandb]'                          # optional, only if you want W&B
 ```
 
