@@ -72,6 +72,26 @@ def cmd_bench(args: argparse.Namespace) -> None:
     print(json.dumps(out, indent=2))
 
 
+def _make_agent(spec: str, seed: int = 0):  # type: ignore[no-untyped-def]
+    """``random`` | ``heuristic`` | path to a checkpoint (policy-only agent)."""
+    from pokezero.agents import HeuristicAgent, RandomAgent
+    from pokezero.agents.az import PolicyAgent
+
+    if spec == "random":
+        return RandomAgent(seed)
+    if spec == "heuristic":
+        return HeuristicAgent(seed)
+    return PolicyAgent(_load_net(spec), name=Path(spec).stem)
+
+
+def cmd_replay(args: argparse.Namespace) -> None:
+    from pokezero.viz import render_game_html
+
+    html, rewards = render_game_html(_make_agent(args.a, 0), _make_agent(args.b, 1))
+    Path(args.out).write_text(html)
+    print(f"wrote {args.out} (seat0 reward {rewards[0]:+.0f}); open it in a browser")
+
+
 def cmd_package(args: argparse.Namespace) -> None:
     from pokezero.submission import build_submission
 
@@ -94,6 +114,11 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--sims", type=int, default=32)
     b.add_argument("--checkpoint", default=None)
     b.set_defaults(fn=cmd_bench)
+    r = sub.add_parser("replay", help="render one game in Kaggle's replay viewer (HTML)")
+    r.add_argument("--a", default="heuristic", help="seat 0: random | heuristic | checkpoint path")
+    r.add_argument("--b", default="random", help="seat 1: random | heuristic | checkpoint path")
+    r.add_argument("--out", default="replay.html")
+    r.set_defaults(fn=cmd_replay)
     k = sub.add_parser("package", help="build a Kaggle submission archive (policy-only agent)")
     k.add_argument("--checkpoint", required=True)
     k.add_argument("--out", default="submission.tar.gz")

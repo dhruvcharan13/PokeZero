@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -41,6 +42,7 @@ def train_steps(
     buf: ReplayBuffer,
     cfg: TrainConfig,
     rng: np.random.Generator,
+    on_step: Callable[[dict[str, float]], None] | None = None,
 ) -> dict[str, float]:
     net.train()
     agg = {"policy_loss": 0.0, "value_loss": 0.0}
@@ -51,6 +53,8 @@ def train_steps(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), cfg.grad_clip)
         opt.step()
+        if on_step is not None:
+            on_step({**parts, "loss": float(loss.detach())})
         for k, v in parts.items():
             agg[k] += v / cfg.steps_per_iter
     net.eval()

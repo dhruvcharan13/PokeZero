@@ -107,7 +107,9 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
         losses: dict[str, float] = {"policy_loss": float("nan"), "value_loss": float("nan")}
         trained = len(buf) >= cfg.train.min_examples
         if trained:
-            losses = train_steps(learner, opt, buf, cfg.train, np_rng)
+            losses = train_steps(
+                learner, opt, buf, cfg.train, np_rng, on_step=tracker.log_train_step
+            )
         # 3. evaluate candidate vs champion, and both vs baselines
         h2h = candidate_vs_champion(learner, champion, cfg, cfg.seed + it)
         promoted = trained and h2h["win_rate"] >= cfg.eval.promote_threshold
@@ -126,6 +128,11 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
         if promoted:
             champion = copy.deepcopy(learner).eval()
             save_checkpoint(store, "champion.pt", _checkpoint(champion, cfg, it))
+            tracker.log_checkpoint(
+                f"{cfg.run_name}-champion",
+                store.get_bytes("champion.pt"),
+                {"iteration": it, "h2h_win_rate": h2h["win_rate"]},
+            )
         last = {
             "iteration": it,
             "promoted": promoted,
@@ -143,6 +150,13 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
             "trained": trained,
         }
         tracker.log(it, last)
+        if tracker.wandb_enabled and tracker.log_replays:
+            from pokezero.viz import render_game_html
+
+            html, _ = render_game_html(
+                PolicyAgent(learner, "candidate"), PolicyAgent(champion, "champion")
+            )
+            tracker.log_replay(it, html)
         print(json.dumps(last))
     tracker.finish()
     return last

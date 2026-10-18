@@ -61,13 +61,43 @@ The library exports `AgentStart`, `SearchBegin`, `SearchStep`, `SearchEnd`, `Sea
 * Search throughput on 4 CPU cores with the 2.2M-parameter network: ~400-480 simulations/s
   (about 1 engine call per simulation).
 
+## Kaggle's replay viewer (confirmed)
+
+`kaggle_environments.make("cabt")` + `env.run([...])` + `env.render(mode="html")` produces a ~2 MB
+self-contained page (`envs/cabt/visualizer/default/dist/index.html`, 612 KB) with a step slider. Its data
+is the runner's `visualize` payload, which is **omniscient**: both players' hands and prize ids.
+That is fine for spectating and does not change agents' observations. `pokezero replay` feeds our agents through
+this runner. `CabtEnv` does not use the runner for training because the runner stores one battle in a
+module global, plays `bo` battles, and is slower; this has nothing to do with the search leak.
+
+## What other entries report
+
+Taken from public repos/notes (I could not open Kaggle writeups; none of this was re-run by me):
+
+* Most top-visible approaches are rule-based, behaviour-cloning or gradient-boosted rankers; search is
+  usually a gated "override" on main-phase decisions, not a full tree.
+* `4dalols/pokemon-agent`: determinized rollouts through `SearchBegin/Step`, ~68% vs a heuristic opponent
+  (not independently checked). `Jun-Morita/kaggle-ptcg-ai-battle`: search with determinization; going
+  from 1 to 4 determinizations was flat, and giving search the *correct* opponent deck gained +0.011
+  (noise). Both are what you would see if the hidden-info arguments were ignored, but nobody
+  I found states that.
+* None of the pages I read mentions the leak. The README of one calls the API a way to give the
+  opponent's hidden information "as predicted values", so the intended contract may differ from what I observed
+  (unresolved).
+* A from-scratch AlphaZero iteration in one repo collapsed to a 0.195 win rate because narrow visit targets
+  (2-3 visits per candidate) flattened the policy: the same failure mode our demo showed. Their
+  conclusion was that without a working search operator there is no policy-improvement step.
+* Sandbox constraints reported by one competitor (unverified): **no numpy**, a limited archive size, ~1.6 vCPU, and
+  a 600 s total budget per match with no per-move cap. Our `torch`/`numpy` submission would likely fail
+  there; a pure-Python or exported-weights inference path would be needed.
+
 ## Unresolved questions
 
 1. **Competition rules** (kaggle.com unreachable): is use of `Search*` inside a submitted agent
    allowed, and does the grader's `search_begin_input` carry the same full state? If search
    is allowed *with* leakage, the oracle is a competition feature and the "research-only" label can
    be dropped; if not, a leak-free forward model is required.
-2. Does the submission runtime provide **PyTorch**, and what are its CPU/time limits per move
+2. Does the submission runtime provide **PyTorch** (and numpy: see above), and what are its CPU/time limits per move
    (`actTimeout` is `0` here)? `pokezero package` falls back to the heuristic agent if torch is missing.
 3. Deck rules for the real competition (the local engine only checked size 60 and card validity).
    A single fixed starter deck is used everywhere; deck building is out of scope.

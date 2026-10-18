@@ -49,8 +49,27 @@ Artifacts for a run live under `runs/<run_name>/`:
 
 ### Weights & Biases (optional, off by default)
 
-`wandb.enabled=true` plus `WANDB_API_KEY` in the environment. No key or entity is stored anywhere in
-the repo; with the default config the tracker only writes `metrics.jsonl`.
+```bash
+uv pip install -e '.[wandb]' && export WANDB_API_KEY=...        # key stays in your environment
+pokezero train --config configs/default.yaml wandb.enabled=true wandb.project=pokezero
+# no network? wandb.mode=offline, then `wandb sync` later
+```
+
+With `wandb.enabled=true` you get: per-optimizer-step `train/loss|policy_loss|value_loss`; per-iteration
+`iter/*` (candidate-vs-champion win rate, win rates vs random and heuristic, self-play sims/s, promotion);
+every promoted champion uploaded as a model artifact (`wandb.log_checkpoints`); and a
+candidate-vs-champion replay attached each iteration (`wandb.log_replays`). The default config writes only
+`metrics.jsonl`; no key or entity is stored in the repo.
+
+### Watching a game
+
+```bash
+pokezero replay --a heuristic --b random --out replay.html        # also: a checkpoint path
+```
+
+Opens in any browser with Kaggle's own replay viewer (step slider, both hands visible, spectator
+view only). It runs through the official `kaggle_environments` runner; agents still see only their own
+observation. The viewer is plain boxes and text, and there is no play-against-the-model mode yet.
 
 ### Docker
 
@@ -68,7 +87,7 @@ The Dockerfile was written but **not built** in the environment this slice was d
 `pokezero package` writes `submission.tar.gz` = `main.py` (exposes `agent(obs)`; returns the 60-card deck
 when `obs["select"] is None`), the `pokezero` package and `model.pt`. It runs the policy network only,
 validates every action, and falls back to the heuristic agent if torch is missing or anything raises.
-Whether the grader provides PyTorch is unknown ([unresolved](docs/sdk-findings.md#unresolved-questions)).
+Whether the grader provides PyTorch is unknown, and one competitor reports the sandbox has **no numpy**, which would break this archive ([details](docs/sdk-findings.md#what-other-entries-report)).
 Check the submission format against the competition's data page before uploading.
 
 ## Architecture

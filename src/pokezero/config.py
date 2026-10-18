@@ -46,7 +46,9 @@ class WandbConfig:
     project: str = "pokezero"
     entity: str = ""
     run_name: str = ""
-    mode: str = "online"
+    mode: str = "online"  # online | offline | disabled
+    log_checkpoints: bool = True  # upload promoted champions as W&B artifacts
+    log_replays: bool = True  # attach a candidate-vs-champion replay each iteration
 
 
 @dataclass
