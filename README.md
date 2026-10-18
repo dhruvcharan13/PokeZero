@@ -88,7 +88,7 @@ The Dockerfile was written but **not built** in the environment this slice was d
 when `obs["select"] is None`), the `pokezero` package and `model.pt`. It runs the policy network only,
 validates every action, and falls back to the heuristic agent if torch is missing or anything raises.
 Whether the grader provides PyTorch is unknown, and one competitor reports the sandbox has **no numpy**, which would break this archive ([details](docs/sdk-findings.md#what-other-entries-report)).
-Check the submission format against the competition's data page before uploading.
+**This archive is not submission-ready**: community repos describe the format as `main.py` + `deck.csv` + the engine `cg/` folder, with torch not guaranteed, and our package depends on `kaggle_environments` and torch. See [competition format](docs/sdk-findings.md#competition-format-read-on-2026-10-18).
 
 ## Architecture
 

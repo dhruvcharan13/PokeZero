@@ -61,6 +61,36 @@ The library exports `AgentStart`, `SearchBegin`, `SearchStep`, `SearchEnd`, `Sea
 * Search throughput on 4 CPU cores with the 2.2M-parameter network: ~400-480 simulations/s
   (about 1 engine call per simulation).
 
+## Competition format (read on 2026-10-18)
+
+`kaggle.com` pages are JavaScript-rendered and my fetches returned only the title/description for the
+Playground's Overview, Rules and Data tabs, so **the Playground's own rules are still unread**. These facts
+come from the official site (`ptcg-abc.pokemon.co.jp`, whose FAQ says the Kaggle rules prevail) and from
+public community repos:
+
+* Two main competitions: **Simulation** (`pokemon-tcg-ai-battle`: continuous ladder, no prize,
+  June 16 - Aug 17 2026 JST, 5 submissions/day) and **Strategy** (`...-strategy`: a report about the agent,
+  all the prize money, to Sept 14 2026; top 8 go to a live final). Both windows are **already closed** as of
+  today. The Playground is not mentioned on the official site; I assume it is a practice sibling (unverified).
+* Official rules summary: Standard-format rules with a designated card list; **10 minutes per player per
+  match, running out of time loses**; the agent does not have to build its own deck.
+* Submission (community repos, consistent with each other, not seen on an official page): `submission.tar.gz`
+  containing `main.py` (`agent(obs) -> list[int]`), `deck.csv` and the engine `cg/` folder.
+* Runtime: one repo says "torch was not guaranteed" and ships hand-written NumPy; another says the sandbox
+  does not use numpy and ships pure Python. So **neither torch nor numpy can be assumed.**
+* Not found anywhere I could read: any statement about whether `Search*` may be used or about hidden-info
+  handling inside it.
+* Reported outcomes: determinized ISMCTS lost on the ladder even after winning locally (strategy fusion,
+  one repo); search made repeated runs disagree; self-play showed no learning gain in two repos.
+
+### Consequence for this repo
+
+`pokezero package` is **not yet submission-ready**: it ships `pokezero` + `model.pt` + a torch `main.py`, but
+the competition format also wants `deck.csv` and the engine `cg/` folder, and our code imports
+`kaggle_environments` (for the deck and the native library) and torch. A real submission needs a
+self-contained package (engine folder alongside, no `kaggle_environments` import) and torch-free inference
+(numpy or pure Python).
+
 ## Kaggle's replay viewer (confirmed)
 
 `kaggle_environments.make("cabt")` + `env.run([...])` + `env.render(mode="html")` produces a ~2 MB
