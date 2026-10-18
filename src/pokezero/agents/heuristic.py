@@ -1,9 +1,9 @@
 """Rule-based baseline with a guaranteed-legal fallback.
 
-Option type meanings are inferred from observed play (not documented by the SDK):
-13 = attack (``attackId``), 14 = end turn, 8 = play a hand card onto a Pokemon (attach /
-evolve), 7 = other hand action, 3/6/15 = card or energy picks inside effect prompts.
-Priority on the main prompt (select type 0): play cards > strongest attack > end turn.
+Option types (official enum, https://matsuoinstitute.github.io/cabt/): 7 PLAY, 8 ATTACH,
+9 EVOLVE, 10 ABILITY, 11 DISCARD, 12 RETREAT, 13 ATTACK (``attackId``), 14 END. Priority on the
+main prompt (select type 0): PLAY/ATTACH/EVOLVE/ABILITY > strongest attack > DISCARD/RETREAT >
+end turn.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from pokezero.env.cards import attack_table
 
 MAIN_SELECT = 0
 ATTACK, END_TURN = 13, 14
+DISCARD, RETREAT = 11, 12
 
 
 class HeuristicAgent:
@@ -53,6 +54,8 @@ class HeuristicAgent:
                 score = 500.0 + dmg if late else 50.0 + dmg / 10.0
             elif t == END_TURN:
                 score = -1000.0
+            elif t in (DISCARD, RETREAT):
+                score = 20.0  # situational: only after developing the board and before ending
             else:
                 score = 100.0 - t + self.rng.random() if not late else 10.0 - t
             scored.append((score, i))

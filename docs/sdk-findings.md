@@ -4,9 +4,8 @@ Everything here was observed by running the engine that ships in `kaggle-environ
 (`kaggle_environments.envs.cabt`, native `libcg`) on 2026-10-17. Items marked **inferred** were
 deduced from behaviour, not documented. Items under "Unresolved" were *not* verified.
 
-The container used to write this could not reach `kaggle.com` (proxy 403), so competition
-**rules, data files and the official starter notebook were not read**. Everything below comes from
-the PyPI package and from experiments.
+The container used to write this could not reach `kaggle.com` (proxy 403); the Playground rules were
+later pasted by the user (see below). The engine facts come from the PyPI package and from experiments.
 
 ## Confirmed
 
@@ -17,8 +16,8 @@ the PyPI package and from experiments.
 | Observation | `select` (`type`, `context`, `minCount`, `maxCount`, `option[]`, `deck`, `contextCard`, `effect`, ...), `current` (public board; `players[i].hand` is a list for the acting player and `null` for the opponent; `prize` entries are `null`), `logs` (typed event list), `search_begin_input` (opaque ASCII payload). |
 | Action space | Variable-size, structured: each option is a dict with a `type` (observed 0,1,2,3,6,7,8,9,10,12,13,14,15) and type-specific fields (`area`, `index`, `playerIndex`, `inPlayArea`, `inPlayIndex`, `attackId`, `cardId`, `count`, `energyIndex`). Multi-pick prompts (`maxCount` up to 3 observed) take a list. `maxCount` can exceed the number of options, so picks must be capped. |
 | Prompt kinds | 9 distinct `(select.type, min, max)` combinations seen over random play; type 0 is the main-phase menu (≈60% of decisions). `select.context` (12 values seen) says why the prompt exists. |
-| Option types (**inferred**) | 13 = attack (`attackId`), 14 = end turn, 8 = play a hand card onto a Pokemon (attach/evolve), 7 = other hand/in-play action, 3/6/15 = card/energy picks inside effect prompts, 1/2 = coin-style yes/no at setup, 0 = numeric choice. |
-| Areas (**inferred**) | `area` 2 = hand (index into the acting player's hand), 4 = active, 5 = bench, 6 = deck (from logs). Other codes are not decoded. |
+| Option types | Official enum (matsuoinstitute.github.io/cabt): 0 NUMBER, 1 YES, 2 NO, 3 CARD, 4 TOOL_CARD, 5 ENERGY_CARD, 6 ENERGY, 7 PLAY, 8 ATTACH, 9 EVOLVE, 10 ABILITY, 11 DISCARD, 12 RETREAT, 13 ATTACK, 14 END, 15 SKILL, 16 SPECIAL_CONDITION. Select types 0-10 (MAIN, CARD, ATTACHED_CARD, ..., YES_NO, SPECIAL_CONDITION); `context` has 49 documented values (e.g. 0 MAIN, 41 IS_FIRST, 46 COIN_HEAD). My first guesses were partly wrong (e.g. I had 7/8 as one family and no RETREAT); the heuristic and docs now follow the official enum. |
+| Areas | Official: 1 DECK, 2 HAND, 3 DISCARD, 4 ACTIVE, 5 BENCH, 6 PRIZE, 7 STADIUM, 8 ENERGY, 9 TOOL, 10 PRE_EVOLUTION, 11 PLAYER, 12 LOOKING. (I had guessed 6 = deck; it is the prize area.) The encoder only resolves hand/active/bench references today. |
 | Local simulator | `cg.game.battle_start/battle_select/battle_finish` wrap `libcg.so` via ctypes. Linux x86-64/arm64, macOS and Windows binaries are bundled. `Select` returns non-zero for illegal input. |
 | One live battle per module | `cg.game` stores the battle pointer in a class attribute. `pokezero.env.engine` re-binds the same C functions and keeps the pointer per object, so several games can coexist (tested). |
 | Speed (4-core CPU, random play) | ~85 games/s, ~77 decisions/game, ~6,300 decisions/s. |
@@ -61,35 +60,48 @@ The library exports `AgentStart`, `SearchBegin`, `SearchStep`, `SearchEnd`, `Sea
 * Search throughput on 4 CPU cores with the 2.2M-parameter network: ~400-480 simulations/s
   (about 1 engine call per simulation).
 
-## Competition format (read on 2026-10-18)
+## Playground rules and format (pasted from the competition page on 2026-10-18)
 
-`kaggle.com` pages are JavaScript-rendered and my fetches returned only the title/description for the
-Playground's Overview, Rules and Data tabs, so **the Playground's own rules are still unread**. These facts
-come from the official site (`ptcg-abc.pokemon.co.jp`, whose FAQ says the Kaggle rules prevail) and from
-public community repos:
+My own fetches of kaggle.com only return a title (the tabs are JavaScript-rendered), so the user pasted the
+Playground's Data/Rules/Overview text. Key facts:
 
-* Two main competitions: **Simulation** (`pokemon-tcg-ai-battle`: continuous ladder, no prize,
-  June 16 - Aug 17 2026 JST, 5 submissions/day) and **Strategy** (`...-strategy`: a report about the agent,
-  all the prize money, to Sept 14 2026; top 8 go to a live final). Both windows are **already closed** as of
-  today. The Playground is not mentioned on the official site; I assume it is a practice sibling (unverified).
-* Official rules summary: Standard-format rules with a designated card list; **10 minutes per player per
-  match, running out of time loses**; the agent does not have to build its own deck.
-* Submission (community repos, consistent with each other, not seen on an official page): `submission.tar.gz`
-  containing `main.py` (`agent(obs) -> list[int]`), `deck.csv` and the engine `cg/` folder.
-* Runtime: one repo says "torch was not guaranteed" and ships hand-written NumPy; another says the sandbox
-  does not use numpy and ships pure Python. So **neither torch nor numpy can be assumed.**
-* Not found anywhere I could read: any statement about whether `Search*` may be used or about hidden-info
-  handling inside it.
-* Reported outcomes: determinized ISMCTS lost on the ladder even after winning locally (strategy fusion,
-  one repo); search made repeated runs disagree; self-play showed no learning gain in two repos.
+* **The Playground is open**: started Sept 29 2026; entry and team-merger deadline Jan 1 2027; final submission
+  deadline Jan 8 2027; evaluation continues to Jan 22 2027. It is a continuation of the closed Simulation
+  competition (that one ended Aug 17; the Strategy report track ended Sept 14). Prizes are Kaggle swag only.
+* **Format**: a Kaggle Environments simulation; submissions play a ladder against similar-rated agents
+  (Gaussian skill rating, initial mu = 600, latest **2** submissions active, **5 submissions/day**), then a
+  Bradley-Terry tournament at the end. The brief says "best of three" for the research aim; the ladder
+  episodes may be bo3 (the local environment's default `bo` is 3).
+* **Submission**: `.tar.gz` with `main.py` at the top level (not nested) and a `deck.csv` (60 card ids, one
+  per line). At most **197.7 MiB**. Files are placed in `/kaggle_simulations/agent/`. A validation game
+  against itself runs first. Resources: 2 vCPU, 12.2 GiB RAM, 11.8 GiB disk. The grader image is built on
+  Kaggle's Python image (`gcr.io/kaggle-images/python`, so numpy is certain and torch is likely but
+  **not confirmed**) with `kaggle-environments`; the engine comes from that package, so shipping the native
+  `cg/` folder is not required by this page.
+* **Rules that matter here**: no ingress/egress during an episode (no network from the agent); external data
+  and models are allowed if reasonably accessible; no private code sharing outside a team (public sharing on
+  Kaggle is fine); **you may not publicly share Pokemon Elements** (card names/text, card faces, game logic data,
+  deck recipes) or use models trained on them outside the competition; Competition Data is "competition use
+  only" (do not redistribute the card CSV/PDF); episode replays may be public and downloadable.
+* **Docs** (official, https://matsuoinstitute.github.io/cabt/): the observation schema, the enums above,
+  `all_card_data()`, `all_attack()`, `deck.csv` format, and a `search_begin / search_step / search_end /
+  search_release` API listed by name only: **no argument list, hidden-information semantics or lookahead
+  restriction is documented on the pages I could read**. The competition rules text I was given does not forbid
+  search.
+* Episode replays from the leaderboard and a daily export of top episodes (for behaviour cloning / RL / IL)
+  are promised in the forums; the CLI docs are at `Kaggle/kaggle-cli/docs/simulation_competitions.md`.
+* The official site (not the Playground) also states 10 minutes per player per match, timeout = loss; the
+  Playground text does not repeat a time limit, so treat 10 minutes per match as the safe assumption.
+
+Community repos (read-only, unverified) add: ISMCTS-style determinized search lost on the ladder in one repo
+even after winning locally; two repos saw no self-play learning gain.
 
 ### Consequence for this repo
 
-`pokezero package` is **not yet submission-ready**: it ships `pokezero` + `model.pt` + a torch `main.py`, but
-the competition format also wants `deck.csv` and the engine `cg/` folder, and our code imports
-`kaggle_environments` (for the deck and the native library) and torch. A real submission needs a
-self-contained package (engine folder alongside, no `kaggle_environments` import) and torch-free inference
-(numpy or pure Python).
+`pokezero package` now builds the documented layout (`main.py`, `deck.csv`, `pokezero/`, `model.pt`) and
+checks the size cap. Remaining risks: PyTorch in the grader is unconfirmed (the agent falls back to the heuristic
+if the network cannot load), `main.py` has never run on the real ladder, and our package imports
+`kaggle_environments` (present in the grader image per the Docker reference).
 
 ## Kaggle's replay viewer (confirmed)
 
@@ -101,6 +113,8 @@ this runner. `CabtEnv` does not use the runner for training because the runner s
 module global, plays `bo` battles, and is slower; this has nothing to do with the search leak.
 
 ## What other entries report
+
+(Superseded in part by the Playground rules above: the grader image is Kaggle's Python image, so numpy is available and torch is likely.)
 
 Taken from public repos/notes (I could not open Kaggle writeups; none of this was re-run by me):
 
@@ -123,15 +137,11 @@ Taken from public repos/notes (I could not open Kaggle writeups; none of this wa
 
 ## Unresolved questions
 
-1. **Competition rules** (kaggle.com unreachable): is use of `Search*` inside a submitted agent
-   allowed, and does the grader's `search_begin_input` carry the same full state? If search
-   is allowed *with* leakage, the oracle is a competition feature and the "research-only" label can
-   be dropped; if not, a leak-free forward model is required.
-2. Does the submission runtime provide **PyTorch** (and numpy: see above), and what are its CPU/time limits per move
-   (`actTimeout` is `0` here)? `pokezero package` falls back to the heuristic agent if torch is missing.
-3. Deck rules for the real competition (the local engine only checked size 60 and card validity).
-   A single fixed starter deck is used everywhere; deck building is out of scope.
-4. Decoding of all `area` codes and option types 0, 1, 2, 9, 10, 12 (only used as opaque features).
-5. Best-of-3 handling: the kaggle wrapper runs `bo` battles; this repo trains on single battles.
-6. Whether `search_begin_input` can be turned into a belief-sampled hypothetical *without* revealing
-   the true state (would need a custom state reconstruction; no such API is exported).
+1. **Search semantics**: the official docs list `search_begin` etc. without arguments. Is passing predicted hidden
+   information supposed to work (a leak-free lookahead), and is my observation that the arguments are ignored
+   a bug or intended? Is search allowed in submissions? (The pasted rules do not forbid it.)
+2. Is PyTorch available in the grader image? (Likely, from the base image; unconfirmed.) Per-move and per-match time
+   limits for the Playground (10 min/match on the official site).
+3. Does the ladder play bo3 with the same deck? We train on single battles with one fixed deck and never build decks.
+4. Whether `search_begin_input` can be turned into a belief-sampled hypothetical *without* revealing the
+   true state (no such API is documented).

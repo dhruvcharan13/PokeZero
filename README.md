@@ -12,8 +12,9 @@ strong: see [Status](#status-and-honest-limits).
 > supplies ([evidence](docs/sdk-findings.md#cloning--search-the-key-question-for-mcts)). PUCT built on it
 > is an *oracle*. It is therefore off by default (`search.allow_engine_oracle=false` raises), labelled
 > research-only, and **never used by the submission agent**, which is a search-free policy network that
-> sees only the real observation. Kaggle's own pages were unreachable when this was written, so the
-> competition rules on `Search*` are unverified.
+> sees only the real observation. The Playground rules I was given do not forbid search, and the official
+> docs name the search API without documenting its arguments or hidden-information behaviour, so whether this
+> leak is intended is unresolved.
 
 ## Setup
 
@@ -87,8 +88,8 @@ The Dockerfile was written but **not built** in the environment this slice was d
 `pokezero package` writes `submission.tar.gz` = `main.py` (exposes `agent(obs)`; returns the 60-card deck
 when `obs["select"] is None`), the `pokezero` package and `model.pt`. It runs the policy network only,
 validates every action, and falls back to the heuristic agent if torch is missing or anything raises.
-Whether the grader provides PyTorch is unknown, and one competitor reports the sandbox has **no numpy**, which would break this archive ([details](docs/sdk-findings.md#what-other-entries-report)).
-**This archive is not submission-ready**: community repos describe the format as `main.py` + `deck.csv` + the engine `cg/` folder, with torch not guaranteed, and our package depends on `kaggle_environments` and torch. See [competition format](docs/sdk-findings.md#competition-format-read-on-2026-10-18).
+
+The archive follows the Playground's documented layout (`main.py` at top level, `deck.csv`, under 197.7 MiB). It has never run on the real ladder, and PyTorch in the grader image is unconfirmed (the agent falls back to the heuristic). See [Playground rules and format](docs/sdk-findings.md#playground-rules-and-format-pasted-from-the-competition-page-on-2026-10-18).
 
 ## Architecture
 

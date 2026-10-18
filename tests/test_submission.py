@@ -17,7 +17,9 @@ def test_submission_archive_plays_legal_game(tmp_path):
     with tarfile.open(out) as t:
         names = t.getnames()
         t.extractall(tmp_path / "x", filter="data")
-    assert "main.py" in names and "model.pt" in names
+    assert "main.py" in names and "model.pt" in names and "deck.csv" in names
+    deck = (tmp_path / "x" / "deck.csv").read_text().split()
+    assert len(deck) == 60 and all(x.isdigit() for x in deck)
     main_src = (tmp_path / "x" / "main.py").read_text()
     assert "puct" not in main_src and "SearchAgent" not in main_src  # no oracle in submissions
     sys.path.insert(0, str(tmp_path / "x"))
