@@ -28,6 +28,14 @@ uv pip install -e '.[wandb]'                          # optional, only if you wa
 The simulator is `kaggle-environments>=1.33.0` (`envs/cabt`); nothing needs Kaggle credentials to run
 locally.
 
+## Notebook
+
+`notebooks/playground.ipynb` walks through a game, agent matches, the encoder and net, a short
+config-driven training run with plots, and a replay. Locally: `uv sync --extra notebook` then
+`jupyter lab`. On Colab, open it from GitHub; its first cell installs the package. It is committed
+without outputs. Training can use a GPU (`train.device=auto`), but game simulation is CPU-only,
+so self-play remains the bottleneck.
+
 ## Run
 
 ```bash

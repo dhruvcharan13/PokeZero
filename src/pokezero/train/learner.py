@@ -20,6 +20,17 @@ class TrainConfig:
     value_coef: float = 1.0
     grad_clip: float = 1.0
     min_examples: int = 256
+    device: str = "cpu"  # "cpu" | "cuda" | "mps" | "auto" (self-play itself always runs on CPU)
+
+
+def resolve_device(name: str = "auto") -> torch.device:
+    """``auto`` picks CUDA, then Apple MPS, then CPU."""
+    if name == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        mps = getattr(torch.backends, "mps", None)
+        return torch.device("mps" if mps is not None and mps.is_available() else "cpu")
+    return torch.device(name)
 
 
 def loss_fn(
@@ -44,10 +55,12 @@ def train_steps(
     rng: np.random.Generator,
     on_step: Callable[[dict[str, float]], None] | None = None,
 ) -> dict[str, float]:
-    net.train()
+    dev = resolve_device(cfg.device)
+    net.to(dev).train()
     agg = {"policy_loss": 0.0, "value_loss": 0.0}
     for _ in range(cfg.steps_per_iter):
         batch, pi, z = collate_examples(buf.sample(cfg.batch_size, rng))
+        batch, pi, z = batch.to(dev), pi.to(dev), z.to(dev)
         loss, parts = loss_fn(net, batch, pi, z, cfg.value_coef)
         opt.zero_grad(set_to_none=True)
         loss.backward()
@@ -57,5 +70,5 @@ def train_steps(
             on_step({**parts, "loss": float(loss.detach())})
         for k, v in parts.items():
             agg[k] += v / cfg.steps_per_iter
-    net.eval()
+    net.to("cpu").eval()  # agents and self-play run on CPU
     return agg
