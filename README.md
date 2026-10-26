@@ -11,7 +11,9 @@ strong: see [Status](#status-and-honest-limits).
 > exposes (`SearchBegin/SearchStep`) reproduces the opponent's real hand regardless of what the caller
 > supplies ([evidence](docs/sdk-findings.md#cloning--search-the-key-question-for-mcts)). PUCT built on it
 > is an *oracle*. It is therefore off by default (`search.allow_engine_oracle=false` raises), labelled
-> research-only, and **never used by the submission agent**, which is a search-free policy network that
+> research-only, and training no longer uses it: `selfplay.mode=policy` (the default) is plain on-policy
+> self-play from public information, trained with a policy gradient (advantage = result minus value).
+> `selfplay.mode=oracle_search` restores the old leaky targets for experiments, and **never used by the submission agent**, which is a search-free policy network that
 > sees only the real observation. The Playground rules I was given do not forbid search, and the official
 > docs name the search API without documenting its arguments or hidden-information behaviour, so whether this
 > leak is intended is unresolved.
@@ -194,9 +196,9 @@ CI (`.github/workflows/ci.yml`) runs the same on every PR.
   and lost every game to random; nothing was promoted. That is the expected shape of from-scratch
   AlphaZero at this scale, not a result. The value head does fit its targets. Do not read the demo
   numbers as a measure of the approach.
-* The initial hidden-information approximation is the oracle described above. Until a leak-free
-  forward model exists, search-trained policies are trained against targets that used information the
-  agent will not have at submission time.
+* Default training is search-free policy-gradient self-play, so targets use no hidden information, but it
+  is weaker per game than search. `selfplay.mode=oracle_search` trains on targets that used information
+  the agent will not have at submission time; use it for research only.
 * The engine cannot be seeded; reproducibility comes from recorded trajectories.
 * One fixed starter deck is used for both players. No deck building.
 * Docker image untested; CUDA path is infrastructure only (training is CPU).

@@ -96,6 +96,7 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
             cfg.seed * 7919 + it,
             sp.temperature,
             sp.temperature_moves,
+            sp.mode,
         )
         buf.add(res.examples)
         store.put_bytes(f"replay/iter_{it:04d}.npz", examples_to_bytes(res.examples))
@@ -108,7 +109,13 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
         trained = len(buf) >= cfg.train.min_examples
         if trained:
             losses = train_steps(
-                learner, opt, buf, cfg.train, np_rng, on_step=tracker.log_train_step
+                learner,
+                opt,
+                buf,
+                cfg.train,
+                np_rng,
+                on_step=tracker.log_train_step,
+                policy_gradient=sp.mode == "policy",
             )
         # 3. evaluate candidate vs champion, and both vs baselines
         h2h = candidate_vs_champion(learner, champion, cfg, cfg.seed + it)
@@ -140,6 +147,7 @@ def run_training(cfg: Config, store: ArtifactStore) -> dict[str, Any]:
             "selfplay_games": res.games,
             "selfplay_examples": len(res.examples),
             "selfplay_decisions": res.decisions,
+            "selfplay_mode": sp.mode,
             "selfplay_sims_per_s": res.sims / max(res.seconds, 1e-9),
             "selfplay_seconds": res.seconds,
             "selfplay_seat0_wins": res.wins[0],

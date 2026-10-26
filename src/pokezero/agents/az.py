@@ -1,7 +1,7 @@
 """Network-driven agents.
 
 ``PolicyAgent``  -- network priors only; no search, no hidden-information access. This is the
-                    submission-safe agent.
+                    submission-safe agent, and (with ``record=True``) the fair self-play agent.
 ``SearchAgent``  -- PUCT over the engine forward model. RESEARCH ONLY: the engine leaks the
                     opponent's hand into the tree (see ``pokezero.search.puct``).
 """
@@ -40,12 +40,22 @@ def _sample(p: np.ndarray, temperature: float, rng: random.Random) -> int:
 
 class PolicyAgent:
     def __init__(
-        self, net: PokeNet, name: str = "policy", temperature: float = 0.0, seed: int | None = None
+        self,
+        net: PokeNet,
+        name: str = "policy",
+        temperature: float = 0.0,
+        seed: int | None = None,
+        record: bool = False,
     ):
         self.net, self.name, self.temperature = net, name, temperature
+        self.record = record
         self.rng = random.Random(seed)
+        self.examples: list[Example] = []
 
     def reset(self) -> None:
+        pass
+
+    def close(self) -> None:
         pass
 
     def act(self, decision: Decision) -> list[int]:
@@ -62,6 +72,10 @@ class PolicyAgent:
             else:
                 pr, _ = self.net.predict([enc])
                 a = _sample(pr[0], self.temperature, self.rng)
+                if self.record:  # one-hot "target": the sampled action, weighted by advantage
+                    pi = np.zeros(n + 1, dtype=np.float32)
+                    pi[a] = 1.0
+                    self.examples.append(Example(enc, pi, decision.player))
             if a == n:
                 return list(chosen)
             chosen += (a,)

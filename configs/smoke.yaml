@@ -2,7 +2,7 @@
 run_name: smoke
 iterations: 1
 net: {card_dim: 32, slot_dim: 64, hidden: 256, state_dim: 128, action_dim: 64}
-selfplay: {games_per_iter: 3, search: {simulations: 8, allow_engine_oracle: true}}
+selfplay: {mode: policy, games_per_iter: 3}
 replay: {max_examples: 5000}
 train: {batch_size: 64, steps_per_iter: 40, min_examples: 64}
 eval: {games: 6, baseline_games: 4, promote_threshold: 0.0}

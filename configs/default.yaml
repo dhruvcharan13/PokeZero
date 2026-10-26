@@ -5,6 +5,7 @@ seed: 0
 iterations: 5
 net: {card_dim: 64, slot_dim: 128, hidden: 512, state_dim: 256, action_dim: 128}
 selfplay:
+  mode: policy   # fair on-policy self-play; oracle_search leaks the opponent hand (research)
   games_per_iter: 8
   temperature: 1.0
   temperature_moves: 12
@@ -17,7 +18,7 @@ selfplay:
     chance_probe: 3
     max_depth: 40
     reuse_tree: true
-    allow_engine_oracle: true   # research-only: engine search leaks the opponent's hand
+    allow_engine_oracle: false  # only for selfplay.mode=oracle_search (research)
 replay: {max_examples: 20000}
 train: {batch_size: 128, steps_per_iter: 200, lr: 0.001, weight_decay: 0.0001, value_coef: 1.0, grad_clip: 1.0, min_examples: 256}
 eval: {games: 20, promote_threshold: 0.55, use_search: false, search_simulations: 16, baseline_games: 10}

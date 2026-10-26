@@ -18,12 +18,13 @@ T = TypeVar("T")
 
 @dataclass
 class SelfPlayConfig:
+    # "policy" = on-policy self-play from public information only (fair, default).
+    # "oracle_search" = PUCT over the engine clone, which sees the opponent's hand (research).
+    mode: str = "policy"
     games_per_iter: int = 4
     temperature: float = 1.0
-    temperature_moves: int = 12
-    search: SearchConfig = field(
-        default_factory=lambda: SearchConfig(simulations=16, allow_engine_oracle=True)
-    )
+    temperature_moves: int = 12  # oracle_search only; policy mode samples at `temperature` throughout
+    search: SearchConfig = field(default_factory=lambda: SearchConfig(simulations=16))
 
 
 @dataclass

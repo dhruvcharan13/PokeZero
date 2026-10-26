@@ -20,7 +20,6 @@ def test_one_full_iteration(tmp_path):
             "net.state_dim=32",
             "net.action_dim=16",
             "selfplay.games_per_iter=2",
-            "selfplay.search.simulations=4",
             "train.steps_per_iter=5",
             "train.batch_size=16",
             "train.min_examples=16",
@@ -56,3 +55,19 @@ def test_search_refuses_without_oracle_flag():
 
     with pytest.raises(OracleDisabledError):
         PUCTSearch(None, SearchConfig(), [1] * 60)  # type: ignore[arg-type]
+
+
+def test_policy_selfplay_never_touches_engine_search(monkeypatch):
+    from pokezero.env import search_engine
+    from pokezero.model.net import NetConfig, PokeNet
+    from pokezero.search.puct import SearchConfig
+    from pokezero.train.selfplay import generate
+
+    def boom(*a, **k):
+        raise AssertionError("engine search used in fair self-play")
+
+    monkeypatch.setattr(search_engine.EngineSearch, "__init__", boom)
+    net = PokeNet(NetConfig(card_dim=16, slot_dim=32, hidden=64, state_dim=32, action_dim=16)).eval()
+    res = generate(net, SearchConfig(), games=1, seed=0)
+    assert res.examples and res.sims == 0 and res.engine_calls == 0
+    assert all(e.pi.max() == 1.0 and e.z in (-1.0, 0.0, 1.0) for e in res.examples)

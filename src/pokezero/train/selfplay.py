@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from pokezero.agents.az import Example, SearchAgent
+from pokezero.agents.az import Example, PolicyAgent, SearchAgent
 from pokezero.env.base import Trajectory
 from pokezero.env.cabt import CabtEnv, default_deck
 from pokezero.eval.arena import play_game
@@ -51,16 +51,24 @@ def generate(
     seed: int,
     temperature: float = 1.0,
     temperature_moves: int = 12,
+    mode: str = "policy",
 ) -> SelfPlayResult:
+    """``policy``: plain on-policy self-play, public information only (the fair default).
+    ``oracle_search``: PUCT over the engine clone, which leaks the opponent's hand (research)."""
     import time
+
+    if mode not in ("policy", "oracle_search"):
+        raise ValueError(f"unknown selfplay mode {mode!r}")
 
     out = SelfPlayResult()
     deck = default_deck()
     env = CabtEnv(deck, deck)
     t0 = time.perf_counter()
     for g in range(games):
-        agents = [
-            SearchAgent(
+        agents: list = [
+            PolicyAgent(net, f"sp{i}", temperature, seed * 1000 + g * 2 + i, record=True)
+            if mode == "policy"
+            else SearchAgent(
                 net,
                 search_cfg,
                 deck,
@@ -77,8 +85,8 @@ def generate(
             for ex in a.examples:
                 ex.z = rewards[ex.player]
             out.examples += a.examples
-            out.sims += a.sims
-            out.engine_calls += a.engine_calls
+            out.sims += getattr(a, "sims", 0)
+            out.engine_calls += getattr(a, "engine_calls", 0)
             a.close()
         out.trajectories.append(traj)
         out.decisions += len(traj.steps)
@@ -99,5 +107,6 @@ class LocalExecutor:
         seed: int,
         temperature: float,
         temperature_moves: int,
+        mode: str = "policy",
     ) -> SelfPlayResult:
-        return generate(net, search_cfg, games, seed, temperature, temperature_moves)
+        return generate(net, search_cfg, games, seed, temperature, temperature_moves, mode)

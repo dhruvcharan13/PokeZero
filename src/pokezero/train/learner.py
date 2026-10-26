@@ -18,6 +18,7 @@ class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-4  # L2 regularization (decoupled, AdamW)
     value_coef: float = 1.0
+    entropy_coef: float = 0.01  # policy-gradient mode only
     grad_clip: float = 1.0
     min_examples: int = 256
     device: str = "cpu"  # "cpu" | "cuda" | "mps" | "auto" (self-play itself always runs on CPU)
@@ -34,11 +35,26 @@ def resolve_device(name: str = "auto") -> torch.device:
 
 
 def loss_fn(
-    net: PokeNet, batch, pi: torch.Tensor, z: torch.Tensor, value_coef: float
+    net: PokeNet,
+    batch,
+    pi: torch.Tensor,
+    z: torch.Tensor,
+    value_coef: float,
+    policy_gradient: bool = False,
+    entropy_coef: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
+    """``policy_gradient=False``: cross-entropy to ``pi`` (search visit targets).
+    ``True``: ``pi`` is the one-hot action that was played; REINFORCE with the value as baseline."""
     logits, v = net(batch)
     logp = F.log_softmax(logits.masked_fill(~batch.mask, -1e9), dim=-1)
-    policy_loss = -(pi * logp.masked_fill(~batch.mask, 0.0)).sum(-1).mean()
+    logp_m = logp.masked_fill(~batch.mask, 0.0)
+    if policy_gradient:
+        adv = (z - v).detach()
+        policy_loss = -(adv * (pi * logp_m).sum(-1)).mean()
+        entropy = -(logp.exp() * logp_m).sum(-1).mean()
+        policy_loss = policy_loss - entropy_coef * entropy
+    else:
+        policy_loss = -(pi * logp_m).sum(-1).mean()
     value_loss = F.mse_loss(v, z)
     total = policy_loss + value_coef * value_loss
     return total, {
@@ -54,6 +70,7 @@ def train_steps(
     cfg: TrainConfig,
     rng: np.random.Generator,
     on_step: Callable[[dict[str, float]], None] | None = None,
+    policy_gradient: bool = False,
 ) -> dict[str, float]:
     dev = resolve_device(cfg.device)
     net.to(dev).train()
@@ -61,7 +78,9 @@ def train_steps(
     for _ in range(cfg.steps_per_iter):
         batch, pi, z = collate_examples(buf.sample(cfg.batch_size, rng))
         batch, pi, z = batch.to(dev), pi.to(dev), z.to(dev)
-        loss, parts = loss_fn(net, batch, pi, z, cfg.value_coef)
+        loss, parts = loss_fn(
+            net, batch, pi, z, cfg.value_coef, policy_gradient, cfg.entropy_coef
+        )
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), cfg.grad_clip)
