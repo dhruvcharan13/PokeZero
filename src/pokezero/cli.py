@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--out", default="replay.html")
     r.set_defaults(fn=cmd_replay)
     k = sub.add_parser("package", help="build a Kaggle submission archive (policy-only agent)")
-    k.add_argument("--checkpoint", required=True)
+    k.add_argument("--checkpoint", default=None, help="omit for the heuristic-only baseline")
     k.add_argument("--out", default="submission.tar.gz")
     k.set_defaults(fn=cmd_package)
     args = p.parse_args(argv)

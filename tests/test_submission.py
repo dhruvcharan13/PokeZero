@@ -35,3 +35,24 @@ def test_submission_archive_plays_legal_game(tmp_path):
     finally:
         sys.path.remove(str(tmp_path / "x"))
         sys.modules.pop("main", None)
+
+
+def test_heuristic_only_archive_has_no_weights(tmp_path):
+    out = build_submission(None, str(tmp_path / "h.tar.gz"))
+    with tarfile.open(out) as t:
+        names = t.getnames()
+        t.extractall(tmp_path / "x", filter="data")
+    assert "model.pt" not in names and "main.py" in names and "deck.csv" in names
+    sys.path.insert(0, str(tmp_path / "x"))
+    try:
+        sys.modules.pop("main", None)
+        main = importlib.import_module("main")
+        assert main._POLICY is None
+        env = CabtEnv()
+        d = env.reset()
+        while d is not None:
+            d = env.step(main.agent(d.obs))
+        assert env.done
+    finally:
+        sys.path.remove(str(tmp_path / "x"))
+        sys.modules.pop("main", None)

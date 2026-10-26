@@ -72,7 +72,7 @@ def agent(obs):
 """
 
 
-def build_submission(checkpoint: str, out: str = "submission.tar.gz") -> str:
+def build_submission(checkpoint: str | None, out: str = "submission.tar.gz") -> str:
     src_root = Path(__file__).resolve().parent
     with tarfile.open(out, "w:gz") as tar:
         for name, content in (
@@ -82,7 +82,8 @@ def build_submission(checkpoint: str, out: str = "submission.tar.gz") -> str:
             info = tarfile.TarInfo(name)
             info.size = len(content)
             tar.addfile(info, io.BytesIO(content))
-        tar.add(checkpoint, arcname="model.pt")
+        if checkpoint is not None:  # heuristic-only baseline ships no weights
+            tar.add(checkpoint, arcname="model.pt")
         for p in sorted(src_root.rglob("*.py")):
             tar.add(p, arcname=f"pokezero/{p.relative_to(src_root)}")
     size = Path(out).stat().st_size
