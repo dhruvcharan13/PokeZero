@@ -1,20 +1,69 @@
 # PokeZero
 
-An AlphaZero-style training system for the
-[Pokémon TCG AI Battle Challenge](https://www.kaggle.com/competitions/the-pokemon-company-ptcg-ai-battle-challenge-playground),
-adapted to a stochastic, imperfect-information game. This repository is a **CPU-runnable vertical
-slice**: self-play → replay data → training → candidate-vs-champion evaluation → checkpoint, with
-tests, typed config, optional W&B and a Docker image. It is built to be *correct and extensible*, not
-strong: see [Status](#status-and-honest-limits).
+**An AlphaZero-style self-play training system for the
+[Pokémon TCG AI Battle Challenge](https://www.kaggle.com/competitions/the-pokemon-company-ptcg-ai-battle-challenge-playground)**,
+adapted to a stochastic, imperfect-information game with variable legal actions.
 
-> **Read this first: the engine's search leaks hidden information.** The only forward model the SDK
-> exposes (`SearchBegin/SearchStep`) reproduces the opponent's real hand regardless of what the caller
+Self-play → replay data → training → candidate-vs-champion evaluation → checkpoint, end to end on a
+laptop CPU, with typed config, tests, CI, optional Weights & Biases tracking and a Docker image.
+It is built to be *correct and extensible*, not strong yet: see [Status](#status-and-honest-limits).
+
+| | |
+|---|---|
+| **Model** | ≈2.2M-parameter policy/value network: card embeddings, per-slot Pokémon encoder, action encoder |
+| **Training** | On-policy self-play from public information only (policy gradient); PUCT search is opt-in research code |
+| **Evaluation** | Candidate must beat the current champion to be promoted; round-robin win rate and Elo |
+| **Throughput** | ≈112 random games/s, ≈30 policy-network games/s, ≈485 search simulations/s (4-core CPU) |
+| **Quality gates** | 31 tests, `ruff`, `mypy`, CI on every PR |
+
+**Contents:** [Setup](#setup) · [Notebook](#notebook) · [Run](#run) · [Submission](#submission) ·
+[Architecture at a glance](#architecture-at-a-glance) · [Architecture](#architecture) · [vs. AlphaZero](#how-this-differs-from-canonical-alphazero) ·
+[Benchmarks](#measurable-commands) · [Tests](#tests-and-quality-gates) ·
+[Status](#status-and-honest-limits) · [Extension points](#extension-points-designed-for-not-built)
+
+## Architecture at a glance
+
+PokeZero is one loop. The current **champion** network plays games against itself, the games become
+training data, a **candidate** network is trained on that data, and the candidate replaces the champion
+only if it beats it in a head-to-head match.
+
+```mermaid
+flowchart LR
+  CH[Champion network] --> SP[Self-play<br/>games on the engine]
+  SP --> RB[(Replay buffer<br/>bounded window)]
+  RB --> TR[Learner<br/>policy + value loss]
+  TR --> CA[Candidate network]
+  CA --> AR[Arena<br/>candidate vs champion]
+  AR -->|win rate above threshold| CH
+  CH --> PK[Submission agent<br/>search-free policy]
+```
+
+| Layer | Modules in `src/pokezero/` | Role |
+|---|---|---|
+| Environment | `env/` | Wraps the competition's compiled engine behind neutral `Decision` / `GameEnv` types; the only competition-specific code |
+| Model | `model/` | Encodes an observation and its legal options, then scores every option with a policy head and a value head (`PokeNet`) |
+| Agents | `agents/` | Random and heuristic baselines, the network agent, and the search agent used for research |
+| Search | `search/` | PUCT tree search with chance children; research-only because the engine's search leaks hidden information |
+| Training | `train/` | Self-play generation, replay buffer, learner and the outer loop with champion promotion |
+| Evaluation | `eval/` | Round-robin arena and Elo |
+| Infrastructure | `config.py`, `storage.py`, `tracking.py`, `cli.py` | Typed config, artifact store, optional W&B, the `pokezero` command |
+| Packaging | `submission.py`, `viz.py` | Builds the Kaggle archive; renders replays |
+
+Two design choices shape everything else. **Decisions are menus:** the game asks "pick between `min` and
+`max` of these options", so the policy is a masked softmax over the current legal set, with no fixed global
+action space. **Only public information is used:** the network sees the acting player's own hand and public
+zones, never the opponent's hand. Details are under [Architecture](#architecture) below.
+
+## Important: search leaks hidden information
+
+> The engine's only forward model, the SDK's
+> `SearchBegin/SearchStep`, reproduces the opponent's real hand regardless of what the caller
 > supplies ([evidence](docs/sdk-findings.md#cloning--search-the-key-question-for-mcts)). PUCT built on it
 > is an *oracle*. It is therefore off by default (`search.allow_engine_oracle=false` raises), labelled
 > research-only, and training no longer uses it: `selfplay.mode=policy` (the default) is plain on-policy
 > self-play from public information, trained with a policy gradient (advantage = result minus value).
-> `selfplay.mode=oracle_search` restores the old leaky targets for experiments, and **never used by the submission agent**, which is a search-free policy network that
-> sees only the real observation. The Playground rules I was given do not forbid search, and the official
+> `selfplay.mode=oracle_search` restores the old leaky targets for experiments. The oracle is **never used by the
+> submission agent**, which is a search-free policy network that sees only the real observation. The Playground rules I was given do not forbid search, and the official
 > docs name the search API without documenting its arguments or hidden-information behaviour, so whether this
 > leak is intended is unresolved.
 
