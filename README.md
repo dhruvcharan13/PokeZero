@@ -17,9 +17,42 @@ It is built to be *correct and extensible*, not strong yet: see [Status](#status
 | **Quality gates** | 31 tests, `ruff`, `mypy`, CI on every PR |
 
 **Contents:** [Setup](#setup) · [Notebook](#notebook) · [Run](#run) · [Submission](#submission) ·
-[Architecture](#architecture) · [vs. AlphaZero](#how-this-differs-from-canonical-alphazero) ·
+[Architecture at a glance](#architecture-at-a-glance) · [Architecture](#architecture) · [vs. AlphaZero](#how-this-differs-from-canonical-alphazero) ·
 [Benchmarks](#measurable-commands) · [Tests](#tests-and-quality-gates) ·
 [Status](#status-and-honest-limits) · [Extension points](#extension-points-designed-for-not-built)
+
+## Architecture at a glance
+
+PokeZero is one loop. The current **champion** network plays games against itself, the games become
+training data, a **candidate** network is trained on that data, and the candidate replaces the champion
+only if it beats it in a head-to-head match.
+
+```mermaid
+flowchart LR
+  CH[Champion network] --> SP[Self-play<br/>games on the engine]
+  SP --> RB[(Replay buffer<br/>bounded window)]
+  RB --> TR[Learner<br/>policy + value loss]
+  TR --> CA[Candidate network]
+  CA --> AR[Arena<br/>candidate vs champion]
+  AR -->|win rate above threshold| CH
+  CH --> PK[Submission agent<br/>search-free policy]
+```
+
+| Layer | Modules in `src/pokezero/` | Role |
+|---|---|---|
+| Environment | `env/` | Wraps the competition's compiled engine behind neutral `Decision` / `GameEnv` types; the only competition-specific code |
+| Model | `model/` | Encodes an observation and its legal options, then scores every option with a policy head and a value head (`PokeNet`) |
+| Agents | `agents/` | Random and heuristic baselines, the network agent, and the search agent used for research |
+| Search | `search/` | PUCT tree search with chance children; research-only because the engine's search leaks hidden information |
+| Training | `train/` | Self-play generation, replay buffer, learner and the outer loop with champion promotion |
+| Evaluation | `eval/` | Round-robin arena and Elo |
+| Infrastructure | `config.py`, `storage.py`, `tracking.py`, `cli.py` | Typed config, artifact store, optional W&B, the `pokezero` command |
+| Packaging | `submission.py`, `viz.py` | Builds the Kaggle archive; renders replays |
+
+Two design choices shape everything else. **Decisions are menus:** the game asks "pick between `min` and
+`max` of these options", so the policy is a masked softmax over the current legal set, with no fixed global
+action space. **Only public information is used:** the network sees the acting player's own hand and public
+zones, never the opponent's hand. Details are under [Architecture](#architecture) below.
 
 ## Important: search leaks hidden information
 
