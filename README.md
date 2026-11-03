@@ -1,20 +1,36 @@
 # PokeZero
 
-An AlphaZero-style training system for the
-[Pokémon TCG AI Battle Challenge](https://www.kaggle.com/competitions/the-pokemon-company-ptcg-ai-battle-challenge-playground),
-adapted to a stochastic, imperfect-information game. This repository is a **CPU-runnable vertical
-slice**: self-play → replay data → training → candidate-vs-champion evaluation → checkpoint, with
-tests, typed config, optional W&B and a Docker image. It is built to be *correct and extensible*, not
-strong: see [Status](#status-and-honest-limits).
+**An AlphaZero-style self-play training system for the
+[Pokémon TCG AI Battle Challenge](https://www.kaggle.com/competitions/the-pokemon-company-ptcg-ai-battle-challenge-playground)**,
+adapted to a stochastic, imperfect-information game with variable legal actions.
 
-> **Read this first: the engine's search leaks hidden information.** The only forward model the SDK
-> exposes (`SearchBegin/SearchStep`) reproduces the opponent's real hand regardless of what the caller
+Self-play → replay data → training → candidate-vs-champion evaluation → checkpoint, end to end on a
+laptop CPU, with typed config, tests, CI, optional Weights & Biases tracking and a Docker image.
+It is built to be *correct and extensible*, not strong yet: see [Status](#status-and-honest-limits).
+
+| | |
+|---|---|
+| **Model** | ≈2.2M-parameter policy/value network: card embeddings, per-slot Pokémon encoder, action encoder |
+| **Training** | On-policy self-play from public information only (policy gradient); PUCT search is opt-in research code |
+| **Evaluation** | Candidate must beat the current champion to be promoted; round-robin win rate and Elo |
+| **Throughput** | ≈112 random games/s, ≈30 policy-network games/s, ≈485 search simulations/s (4-core CPU) |
+| **Quality gates** | 31 tests, `ruff`, `mypy`, CI on every PR |
+
+**Contents:** [Setup](#setup) · [Notebook](#notebook) · [Run](#run) · [Submission](#submission) ·
+[Architecture](#architecture) · [vs. AlphaZero](#how-this-differs-from-canonical-alphazero) ·
+[Benchmarks](#measurable-commands) · [Tests](#tests-and-quality-gates) ·
+[Status](#status-and-honest-limits) · [Extension points](#extension-points-designed-for-not-built)
+
+## Important: search leaks hidden information
+
+> The engine's only forward model, the SDK's
+> `SearchBegin/SearchStep`, reproduces the opponent's real hand regardless of what the caller
 > supplies ([evidence](docs/sdk-findings.md#cloning--search-the-key-question-for-mcts)). PUCT built on it
 > is an *oracle*. It is therefore off by default (`search.allow_engine_oracle=false` raises), labelled
 > research-only, and training no longer uses it: `selfplay.mode=policy` (the default) is plain on-policy
 > self-play from public information, trained with a policy gradient (advantage = result minus value).
-> `selfplay.mode=oracle_search` restores the old leaky targets for experiments, and **never used by the submission agent**, which is a search-free policy network that
-> sees only the real observation. The Playground rules I was given do not forbid search, and the official
+> `selfplay.mode=oracle_search` restores the old leaky targets for experiments. The oracle is **never used by the
+> submission agent**, which is a search-free policy network that sees only the real observation. The Playground rules I was given do not forbid search, and the official
 > docs name the search API without documenting its arguments or hidden-information behaviour, so whether this
 > leak is intended is unresolved.
 
